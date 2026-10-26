@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Sarabun', 'Noto Sans Thai', system-ui, sans-serif;
+  --color-background: #f3f6f9;
+  --color-foreground: #0f1f2e;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f1f2e;
+  --color-muted: #eef2f6;
+  --color-muted-foreground: #5b6b7b;
+  --color-border: #dbe3ea;
+  --color-input: #c9d4de;
+  --color-ring: #1f6f9f;
+  --color-primary: #0f3d5e;
+  --color-primary-foreground: #ffffff;
+  --color-accent: #f2b33d;
+
+  /* สถานะ */
+  --color-ready: #15803d;
+  --color-ready-soft: #dcfce7;
+  --color-partial: #b7791f;
+  --color-partial-bar: #eab308;
+  --color-partial-soft: #fef3c7;
+  --color-notready: #dc2626;
+  --color-notready-soft: #fee2e2;
+  --color-noresp: #6b7280;
+  --color-noresp-bar: #9ca3af;
+  --color-noresp-soft: #eceff3;
+  --color-pending: #6d28d9;
+  --color-pending-soft: #ede9fe;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+  font-size: 15px;
+}
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ตารางข้อมูล */
+.data-table { @apply w-full border-collapse text-sm; }
+.data-table th { @apply bg-muted px-3 py-2 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap; }
+.data-table td { @apply border-t border-border px-3 py-2 align-top; }
+.data-table tbody tr:hover td { @apply bg-muted/40; }
+
+/* โหมดประชุม: ตัวอักษรใหญ่ */
+.meeting { font-size: clamp(16px, 1.25vw, 22px); }
+
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body { background: #fff; font-size: 12pt; }
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .print-area { box-shadow: none !important; border: none !important; }
+  .data-table th { background: #eef2f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-break { break-before: page; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.print-only { display: none; }
