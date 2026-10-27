@@ -7,8 +7,13 @@ import type { Repo } from './repo'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
 
-const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+// ตัดช่องว่าง/อักขระที่มองไม่เห็น/อักขระที่ไม่ใช่ ASCII ที่อาจติดมาตอนคัดลอกค่าใส่ GitHub Secrets
+// (คีย์ Supabase และ URL ประกอบด้วยอักขระ ASCII ที่พิมพ์ได้เท่านั้น)
+const clean = (v: unknown) => (typeof v === 'string' ? v.replace(/[^\x21-\x7E]/g, '') : '')
+const URL = clean(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, '') || undefined
+const KEY = clean(import.meta.env.VITE_SUPABASE_ANON_KEY) || undefined
+/** คีย์ที่ถูกต้องเป็น JWT (eyJ…) หรือคีย์แบบใหม่ sb_publishable_… */
+export const supabaseKeyLooksValid = !!KEY && (/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(KEY) || /^sb_publishable_[\w-]+$/.test(KEY))
 
 export const supabaseConfigured = !!(URL && KEY && !URL.includes('xxxx'))
 let client: SupabaseClient | null = null
@@ -54,8 +59,20 @@ export const supabaseRepo: Repo = {
     return toUser(p, data.user.email ?? undefined)
   },
   async signIn(email, password) {
-    const { error } = await sb().auth.signInWithPassword({ email, password })
-    if (error) throw new Error(error.message === 'Invalid login credentials' ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : error.message)
+    if (!supabaseKeyLooksValid) {
+      throw new Error('ค่า VITE_SUPABASE_ANON_KEY ใน GitHub Secrets ไม่ถูกต้อง — ต้องเป็นคีย์ anon public ที่ขึ้นต้นด้วย eyJ (หรือ sb_publishable_) โปรดใส่ใหม่แล้ว Run workflow อีกครั้ง')
+    }
+    let error: { message: string } | null = null
+    try {
+      ;({ error } = await sb().auth.signInWithPassword({ email, password }))
+    } catch (e) {
+      throw new Error('เชื่อมต่อฐานข้อมูลไม่ได้ — ตรวจค่า VITE_SUPABASE_URL ใน GitHub Secrets (' + (e as Error).message + ')')
+    }
+    if (error) {
+      if (error.message === 'Invalid login credentials') throw new Error('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+      if (/invalid api key/i.test(error.message)) throw new Error('คีย์ Supabase ไม่ถูกต้อง — ตรวจค่า VITE_SUPABASE_ANON_KEY ใน GitHub Secrets ว่าเป็นคีย์ anon public ของโปรเจกต์ southern-inspection-readiness')
+      throw new Error(error.message)
+    }
     const u = await this.currentUser()
     if (!u) throw new Error('เข้าสู่ระบบไม่สำเร็จ')
     return u
