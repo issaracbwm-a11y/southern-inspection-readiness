@@ -40,7 +40,9 @@ export default function SurveyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundId, unit, round?.id, existing?.updatedAt])
 
-  if (!data || !round || !form || !user) return <p className="text-muted-foreground">กำลังโหลด…</p>
+  // ระหว่างสลับรอบ/หน่วยงาน form ยังเป็นของรอบเดิมอยู่ 1 รอบการแสดงผล – รอให้โหลดของใหม่ก่อน
+  if (!data || !round || !form || !user || form.roundId !== roundId || form.unit !== unit)
+    return <p className="text-muted-foreground">กำลังโหลด…</p>
 
   const allowed = canEditUnit(user, unit)
   const readOnly = !allowed || !editing
@@ -190,7 +192,7 @@ export default function SurveyPage() {
               />
               {!form.cannotParticipate &&
                 round.days.map((d) => {
-                  const day = form.days.find((x) => x.date === d.date)!
+                  const day = form.days.find((x) => x.date === d.date) ?? { date: d.date, available: true, staff: null, crane: null, pickup: null }
                   return (
                     <div key={d.date} className={cn('rounded-xl border p-3', day.available ? 'border-border' : 'border-dashed border-notready/40 bg-notready-soft/40')}>
                       <div className="flex flex-wrap items-center justify-between gap-2">

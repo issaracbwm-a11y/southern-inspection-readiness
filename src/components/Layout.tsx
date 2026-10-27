@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LayoutDashboard, ClipboardEdit, CalendarDays, Presentation, FileBarChart, Settings, LogOut, FlaskConical, Database, AlertCircle } from 'lucide-react'
 import { useApp } from '@/lib/app-context'
 import { unitByCode } from '@/data/plan'
@@ -9,6 +10,7 @@ const ROLE_LABEL = { admin: 'ผู้ดูแลระบบ', unit_officer: '
 
 export function Layout() {
   const { user, repo, setUser, error } = useApp()
+  const loc = useLocation()
   const nav = [
     { to: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, show: true },
     { to: '/survey', label: 'กรอกความพร้อม', icon: ClipboardEdit, show: user?.role !== 'executive' },
@@ -86,7 +88,9 @@ export function Layout() {
       )}
 
       <main className="mx-auto max-w-7xl px-3 py-4 sm:px-4 sm:py-6">
-        <Outlet />
+        <ErrorBoundary resetKey={loc.pathname + loc.search}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* แถบเมนูล่างสำหรับ iPhone */}
