@@ -7,17 +7,38 @@ import type { Repo } from './repo'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
 
-// ตัดช่องว่าง/อักขระที่มองไม่เห็น/อักขระที่ไม่ใช่ ASCII ที่อาจติดมาตอนคัดลอกค่าใส่ GitHub Secrets
-// (คีย์ Supabase และ URL ประกอบด้วยอักขระ ASCII ที่พิมพ์ได้เท่านั้น)
+// ค่าใน GitHub Secrets อาจติดช่องว่าง อักขระที่มองไม่เห็น ชื่อตัวแปร (NAME=...) หรือเครื่องหมายคำพูดมาด้วย
+// จึงดึงเฉพาะส่วนที่เป็น URL / คีย์ออกมา (คีย์ Supabase ประกอบด้วยอักขระ ASCII เท่านั้น)
 const clean = (v: unknown) => (typeof v === 'string' ? v.replace(/[^\x21-\x7E]/g, '') : '')
-const URL = clean(import.meta.env.VITE_SUPABASE_URL).replace(/\/+$/, '') || undefined
-const KEY = clean(import.meta.env.VITE_SUPABASE_ANON_KEY) || undefined
-/** คีย์ที่ถูกต้องเป็น JWT (eyJ…) หรือคีย์แบบใหม่ sb_publishable_… */
-export const supabaseKeyLooksValid = !!KEY && (/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(KEY) || /^sb_publishable_[\w-]+$/.test(KEY))
+const rawUrl = clean(import.meta.env.VITE_SUPABASE_URL)
+const rawKey = clean(import.meta.env.VITE_SUPABASE_ANON_KEY)
+const URL = (rawUrl.match(/https:\/\/[a-z0-9-]+\.supabase\.(co|in)/i)?.[0] ?? rawUrl) || undefined
+const KEY = (rawKey.match(/eyJ[\w-]+\.[\w-]+\.[\w-]+|sb_publishable_[\w-]+/)?.[0] ?? '') || undefined
 
-export const supabaseConfigured = !!(URL && KEY && !URL.includes('xxxx'))
+function jwtRole(k: string): string | null {
+  try {
+    const p = k.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(p + '==='.slice((p.length + 3) % 4))).role ?? null
+  } catch { return null }
+}
+/** ปัญหาของค่าเชื่อมต่อ (null = ใช้ได้) */
+export const supabaseConfigProblem: string | null = !rawKey
+  ? null
+  : !KEY
+    ? 'ค่า VITE_SUPABASE_ANON_KEY ใน GitHub Secrets ไม่ใช่คีย์ Supabase — ต้องเป็นคีย์ anon public ที่ขึ้นต้นด้วย eyJ (หรือ Publishable key ที่ขึ้นต้นด้วย sb_publishable_) โปรดใส่ใหม่แล้ว Run workflow อีกครั้ง (ค่าที่พบ: ยาว ' + rawKey.length + ' ตัวอักษร ขึ้นต้นด้วย "' + rawKey.slice(0, 6) + '…")'
+    : KEY.startsWith('eyJ') && jwtRole(KEY) !== 'anon'
+      ? 'คีย์ใน VITE_SUPABASE_ANON_KEY ไม่ใช่คีย์ anon (อาจเป็นคีย์ลับ service_role ซึ่งห้ามใช้ในหน้าเว็บ) — ลบ Secret นี้แล้วใส่คีย์ anon public แทน'
+      : !URL || !/^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i.test(URL)
+        ? 'ค่า VITE_SUPABASE_URL ใน GitHub Secrets ไม่ถูกต้อง — ต้องเป็นรูปแบบ https://xxxx.supabase.co'
+        : null
+export const supabaseKeyLooksValid = supabaseConfigProblem === null
+
+export const supabaseConfigured = !!(rawUrl && rawKey && !rawUrl.includes('xxxx'))
 let client: SupabaseClient | null = null
-const sb = () => (client ??= createClient(URL!, KEY!))
+const sb = () => {
+  if (supabaseConfigProblem) throw new Error(supabaseConfigProblem)
+  return (client ??= createClient(URL!, KEY!))
+}
 
 function check<T>(res: { data: T; error: any }): T {
   if (res.error) throw new Error(res.error.message)
@@ -59,9 +80,7 @@ export const supabaseRepo: Repo = {
     return toUser(p, data.user.email ?? undefined)
   },
   async signIn(email, password) {
-    if (!supabaseKeyLooksValid) {
-      throw new Error('ค่า VITE_SUPABASE_ANON_KEY ใน GitHub Secrets ไม่ถูกต้อง — ต้องเป็นคีย์ anon public ที่ขึ้นต้นด้วย eyJ (หรือ sb_publishable_) โปรดใส่ใหม่แล้ว Run workflow อีกครั้ง')
-    }
+    if (supabaseConfigProblem) throw new Error(supabaseConfigProblem)
     let error: { message: string } | null = null
     try {
       ;({ error } = await sb().auth.signInWithPassword({ email, password }))
